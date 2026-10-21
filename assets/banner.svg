@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 420" width="1280" height="420" role="img" aria-label="AI Pulse — real-time radar of AI/LLM adoption on GitHub">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b0f1a"/>
+      <stop offset="1" stop-color="#141432"/>
+    </linearGradient>
+    <radialGradient id="glowA" cx="0.18" cy="0.2" r="0.55">
+      <stop offset="0" stop-color="#3987e5" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#3987e5" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowB" cx="0.85" cy="0.75" r="0.5">
+      <stop offset="0" stop-color="#6250d6" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#6250d6" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="logo" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3987e5"/>
+      <stop offset="1" stop-color="#6250d6"/>
+    </linearGradient>
+    <linearGradient id="title" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#b7d3f6"/>
+    </linearGradient>
+    <linearGradient id="sweep" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#3987e5" stop-opacity="0"/>
+      <stop offset="1" stop-color="#3987e5" stop-opacity="0.55"/>
+    </linearGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#ffffff" stroke-opacity="0.035"/>
+    </pattern>
+    <clipPath id="radarClip"><circle cx="1010" cy="210" r="170"/></clipPath>
+  </defs>
+
+  <rect width="1280" height="420" rx="24" fill="url(#bg)"/>
+  <rect width="1280" height="420" rx="24" fill="url(#grid)"/>
+  <rect width="1280" height="420" rx="24" fill="url(#glowA)"/>
+  <rect width="1280" height="420" rx="24" fill="url(#glowB)"/>
+
+  <!-- Radar -->
+  <g stroke="#ffffff" stroke-opacity="0.12" fill="none">
+    <circle cx="1010" cy="210" r="170"/>
+    <circle cx="1010" cy="210" r="127"/>
+    <circle cx="1010" cy="210" r="85"/>
+    <circle cx="1010" cy="210" r="42"/>
+    <path d="M840 210H1180M1010 40V380M890 90L1130 330M1130 90L890 330"/>
+  </g>
+  <g clip-path="url(#radarClip)">
+    <path d="M1010 210 L1180 210 A170 170 0 0 0 1130 90 Z" fill="url(#sweep)">
+      <animateTransform attributeName="transform" type="rotate" from="0 1010 210" to="360 1010 210" dur="4s" repeatCount="indefinite"/>
+    </path>
+  </g>
+  <g>
+    <circle cx="1068" cy="128" r="6" fill="#3987e5"><animate attributeName="opacity" values="1;0.3;1" dur="4s" begin="0.3s" repeatCount="indefinite"/></circle>
+    <circle cx="1112" cy="236" r="5" fill="#199e70"><animate attributeName="opacity" values="1;0.3;1" dur="4s" begin="1.1s" repeatCount="indefinite"/></circle>
+    <circle cx="1046" cy="300" r="7" fill="#d55181"><animate attributeName="opacity" values="1;0.3;1" dur="4s" begin="1.7s" repeatCount="indefinite"/></circle>
+    <circle cx="940" cy="268" r="5" fill="#c98500"><animate attributeName="opacity" values="1;0.3;1" dur="4s" begin="2.4s" repeatCount="indefinite"/></circle>
+    <circle cx="930" cy="150" r="6" fill="#9085e9"><animate attributeName="opacity" values="1;0.3;1" dur="4s" begin="3.2s" repeatCount="indefinite"/></circle>
+    <circle cx="985" cy="110" r="4" fill="#d95926"><animate attributeName="opacity" values="1;0.3;1" dur="4s" begin="3.7s" repeatCount="indefinite"/></circle>
+    <circle cx="1068" cy="128" r="6" fill="none" stroke="#3987e5" stroke-width="2">
+      <animate attributeName="r" values="6;26" dur="2s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.9;0" dur="2s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="1046" cy="300" r="7" fill="none" stroke="#d55181" stroke-width="2">
+      <animate attributeName="r" values="7;28" dur="2.6s" begin="0.8s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.9;0" dur="2.6s" begin="0.8s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="1010" cy="210" r="5" fill="#ffffff"/>
+  </g>
+  <g font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="13" font-weight="700" fill="#ffffff" fill-opacity="0.85">
+    <text x="1076" y="118">Claude</text>
+    <text x="1120" y="240">MCP</text>
+    <text x="1056" y="322">Ollama</text>
+    <text x="878" y="290">pgvector</text>
+    <text x="868" y="140">Gemini</text>
+  </g>
+
+  <!-- Logo + title -->
+  <rect x="72" y="72" width="72" height="72" rx="18" fill="url(#logo)"/>
+  <path d="M84 110h13l5-12 7 24 7-19 4 7h16" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="164" y="132" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="68" font-weight="800" letter-spacing="-2" fill="url(#title)">AI Pulse</text>
+
+  <g font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif">
+    <text x="74" y="192" font-size="25" font-weight="600" fill="#e6e8ef">Radar xu hướng AI/LLM trên GitHub — theo thời gian thực</text>
+    <text x="74" y="224" font-size="18" fill="#9aa3b8">Real-time radar of what open source is building with AI</text>
+  </g>
+
+  <!-- Pulse line -->
+  <path d="M74 266 H250 L268 248 L286 288 L304 236 L322 276 L336 266 H760" fill="none" stroke="#3987e5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="760" stroke-dashoffset="760">
+    <animate attributeName="stroke-dashoffset" values="760;0;0" keyTimes="0;0.55;1" dur="3.2s" repeatCount="indefinite"/>
+  </path>
+
+  <!-- Chips -->
+  <g font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="15" font-weight="600" fill="#e6e8ef">
+    <g transform="translate(74 300)"><rect width="142" height="34" rx="17" fill="#ffffff" fill-opacity="0.07" stroke="#ffffff" stroke-opacity="0.12"/><circle cx="18" cy="17" r="5" fill="#3987e5"/><text x="30" y="22">📡 Live radar</text></g>
+    <g transform="translate(226 300)"><rect width="150" height="34" rx="17" fill="#ffffff" fill-opacity="0.07" stroke="#ffffff" stroke-opacity="0.12"/><circle cx="18" cy="17" r="5" fill="#9085e9"/><text x="30" y="22">✨ AI Insights</text></g>
+    <g transform="translate(386 300)"><rect width="140" height="34" rx="17" fill="#ffffff" fill-opacity="0.07" stroke="#ffffff" stroke-opacity="0.12"/><circle cx="18" cy="17" r="5" fill="#d95926"/><text x="30" y="22">🏁 Tech race</text></g>
+    <g transform="translate(536 300)"><rect width="150" height="34" rx="17" fill="#ffffff" fill-opacity="0.07" stroke="#ffffff" stroke-opacity="0.12"/><circle cx="18" cy="17" r="5" fill="#199e70"/><text x="30" y="22">🕸 Ecosystem</text></g>
+    <g transform="translate(696 300)"><rect width="142" height="34" rx="17" fill="#ffffff" fill-opacity="0.07" stroke="#ffffff" stroke-opacity="0.12"/><circle cx="18" cy="17" r="5" fill="#c98500"/><text x="30" y="22">⚔ Repo duel</text></g>
+  </g>
+  <text x="74" y="372" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="14" fill="#7d879c">50+ AI technologies · 8 groups · installable PWA · Node.js, nothing to install · VI / EN</text>
+</svg>

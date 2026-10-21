@@ -1,0 +1,15 @@
+services:
+  ai-pulse:
+    build: .
+    container_name: ai_pulse
+    ports:
+      - "8787:8787"
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - ai_pulse_data:/runtime
+    restart: unless-stopped
+
+volumes:
+  ai_pulse_data:

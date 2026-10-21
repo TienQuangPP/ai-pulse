@@ -1,0 +1,32 @@
+{
+  "name": "ai-pulse",
+  "version": "2.1.1",
+  "description": "AI Pulse — real-time radar of AI/LLM adoption across GitHub open source: live radar, technology race, ecosystem graph, AI insights with Claude. Installable PWA.",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "demo": "node server/index.js --demo",
+    "dev": "node --watch server/index.js",
+    "test": "node --test tests/*.test.js"
+  },
+  "engines": {
+    "node": ">=18.17"
+  },
+  "keywords": [
+    "github",
+    "ai",
+    "llm",
+    "analytics",
+    "pwa",
+    "realtime"
+  ],
+  "optionalDependencies": {
+    "@anthropic-ai/sdk": "^0.137.0"
+  },
+  "author": "TienQuangPP (https://github.com/TienQuangPP)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TienQuangPP/ai-pulse.git"
+  },
+  "homepage": "https://github.com/TienQuangPP/ai-pulse"
+}
