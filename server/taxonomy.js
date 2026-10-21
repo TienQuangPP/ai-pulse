@@ -2,9 +2,13 @@
 /**
  * AI/LLM technology taxonomy.
  *
- * Each technology has one or more regex patterns. Patterns are matched
- * case-insensitively with word boundaries, avoiding the false positives of naive
- * substring matching (e.g. "rag" matching "storage", "gpt" matching "gptables").
+ * Each technology has regex `patterns` (strong signals) and optional `weak` patterns.
+ * Everything is matched case-insensitively with word boundaries, avoiding the false
+ * positives of naive substring matching ("rag" in "storage", "gpt" in "gptables").
+ *
+ * Weak patterns are ambiguous words (MCP = Minecraft Coder Pack, LoRa radio, GPT disk
+ * partitions, "torch", "grok", "whisper"…). They only count when the same text also
+ * contains at least one strong signal, or in dependency files where context is explicit.
  */
 
 const CATEGORIES = [
@@ -22,7 +26,7 @@ const TECHNOLOGIES = [
   // LLM providers & models
   { id: 'openai', label: 'OpenAI', category: 'llm', patterns: ['openai'] },
   { id: 'chatgpt', label: 'ChatGPT', category: 'llm', patterns: ['chat-?gpt'] },
-  { id: 'gpt', label: 'GPT', category: 'llm', patterns: ['gpt[-\\s]?[345o](?:\\.\\d)?(?:-\\w+)?', 'gpt'] },
+  { id: 'gpt', label: 'GPT', category: 'llm', patterns: ['gpt[-\\s]?\\d(?:\\.\\d)?o?(?:[-\\s]?(?:mini|turbo|nano|pro))?','gpt[-\\s]?(?:oss|neo|j|engineer|researcher)', 'custom gpts?'], weak: ['gpts?'] },
   { id: 'claude', label: 'Claude', category: 'llm', patterns: ['claude'] },
   { id: 'anthropic', label: 'Anthropic', category: 'llm', patterns: ['anthropic'] },
   { id: 'gemini', label: 'Gemini', category: 'llm', patterns: ['gemini', 'google[-_]?genai', 'generativeai'] },
@@ -30,21 +34,21 @@ const TECHNOLOGIES = [
   { id: 'mistral', label: 'Mistral', category: 'llm', patterns: ['mistral', 'mixtral'] },
   { id: 'deepseek', label: 'DeepSeek', category: 'llm', patterns: ['deepseek'] },
   { id: 'qwen', label: 'Qwen', category: 'llm', patterns: ['qwen\\d?'] },
-  { id: 'grok', label: 'Grok', category: 'llm', patterns: ['grok'] },
+  { id: 'grok', label: 'Grok', category: 'llm', patterns: ['grok[-\\s]?\\d', 'xai[-\\s]grok', 'grok api'], weak: ['grok'] },
   { id: 'llm', label: 'LLM', category: 'llm', patterns: ['llms?', 'large language models?'] },
 
   // Frameworks
   { id: 'langchain', label: 'LangChain', category: 'framework', patterns: ['langchain'] },
   { id: 'langgraph', label: 'LangGraph', category: 'framework', patterns: ['langgraph'] },
   { id: 'llamaindex', label: 'LlamaIndex', category: 'framework', patterns: ['llama[-_\\s]?index'] },
-  { id: 'huggingface', label: 'Hugging Face', category: 'framework', patterns: ['hugging[-\\s]?face', 'transformers'] },
+  { id: 'huggingface', label: 'Hugging Face', category: 'framework', patterns: ['hugging[-\\s]?face', 'hf[-_]hub'], weak: ['transformers'] },
   { id: 'dspy', label: 'DSPy', category: 'framework', patterns: ['dspy'] },
   { id: 'semantickernel', label: 'Semantic Kernel', category: 'framework', patterns: ['semantic[-\\s]kernel'] },
   { id: 'aisdk', label: 'Vercel AI SDK', category: 'framework', patterns: ['ai[-\\s]sdk'] },
 
   // Agents
-  { id: 'agent', label: 'AI Agent', category: 'agent', patterns: ['ai[-\\s]agents?', 'agentic', 'llm[-\\s]agents?'] },
-  { id: 'mcp', label: 'MCP', category: 'agent', patterns: ['mcp', 'model context protocol', 'modelcontextprotocol'] },
+  { id: 'agent', label: 'AI Agent', category: 'agent', patterns: ['ai[-\\s]agents?', 'agentic', 'llm[-\\s]agents?'], weak: ['agents?'] },
+  { id: 'mcp', label: 'MCP', category: 'agent', patterns: ['model context protocol', 'modelcontextprotocol', 'mcp[-\\s_]?(?:servers?|clients?|tools?|hosts?)', 'fastmcp'], weak: ['mcp'] },
   { id: 'autogen', label: 'AutoGen', category: 'agent', patterns: ['autogen'] },
   { id: 'crewai', label: 'CrewAI', category: 'agent', patterns: ['crew[-\\s]?ai'] },
   { id: 'toolcalling', label: 'Tool calling', category: 'agent', patterns: ['function[-\\s]calling', 'tool[-\\s]calling', 'tool[-\\s]use'] },
@@ -69,20 +73,20 @@ const TECHNOLOGIES = [
 
   // Techniques
   { id: 'rag', label: 'RAG', category: 'technique', patterns: ['rag', 'retrieval[-\\s]augmented'] },
-  { id: 'embedding', label: 'Embeddings', category: 'technique', patterns: ['embeddings?'] },
+  { id: 'embedding', label: 'Embeddings', category: 'technique', patterns: ['text[-_\\s]embeddings?', 'embedding[-\\s]models?', 'sentence[-_\\s]transformers', 'vector embeddings?'], weak: ['embeddings?'] },
   { id: 'finetune', label: 'Fine-tuning', category: 'technique', patterns: ['fine[-\\s]?tun(?:e|ed|ing)'] },
-  { id: 'lora', label: 'LoRA', category: 'technique', patterns: ['q?lora'] },
+  { id: 'lora', label: 'LoRA', category: 'technique', patterns: ['qlora', 'lora[-\\s](?:adapters?|weights|training)', 'peft'], weak: ['lora'] },
   { id: 'prompt', label: 'Prompt engineering', category: 'technique', patterns: ['prompt[-\\s]engineering', 'system prompts?', 'prompt templates?'] },
-  { id: 'rlhf', label: 'RLHF', category: 'technique', patterns: ['rlhf', 'dpo'] },
+  { id: 'rlhf', label: 'RLHF', category: 'technique', patterns: ['rlhf', 'rlaif'], weak: ['dpo'] },
 
   // Generative media
   { id: 'genai', label: 'Generative AI', category: 'genai', patterns: ['generative[-\\s]ai', 'gen[-\\s]?ai'] },
   { id: 'diffusion', label: 'Stable Diffusion', category: 'genai', patterns: ['stable[-\\s]diffusion', 'diffusion models?', 'comfyui', 'sdxl'] },
-  { id: 'whisper', label: 'Whisper', category: 'genai', patterns: ['whisper'] },
-  { id: 'tts', label: 'Text-to-speech', category: 'genai', patterns: ['text[-\\s]to[-\\s]speech', 'tts'] },
+  { id: 'whisper', label: 'Whisper', category: 'genai', patterns: ['openai[-_\\s]?whisper', 'faster[-_]?whisper', 'whisper\\.cpp', 'whisperx'], weak: ['whisper'] },
+  { id: 'tts', label: 'Text-to-speech', category: 'genai', patterns: ['text[-\\s]to[-\\s]speech'], weak: ['tts'] },
 
   // Classic ML / DL
-  { id: 'pytorch', label: 'PyTorch', category: 'ml', patterns: ['pytorch', 'torch'] },
+  { id: 'pytorch', label: 'PyTorch', category: 'ml', patterns: ['pytorch'], weak: ['torch'] },
   { id: 'tensorflow', label: 'TensorFlow', category: 'ml', patterns: ['tensorflow', 'keras'] },
   { id: 'ml', label: 'Machine learning', category: 'ml', patterns: ['machine[-\\s]learning', 'ml[-\\s]model'] },
   { id: 'dl', label: 'Deep learning', category: 'ml', patterns: ['deep[-\\s]learning', 'neural[-\\s]networks?'] },

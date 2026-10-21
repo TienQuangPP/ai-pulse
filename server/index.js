@@ -16,6 +16,7 @@ const { normalize, fromFlat } = require('./normalize');
 const demo = require('./demo');
 const insights = require('./insights');
 const assistant = require('./ask');
+const { createGuard, csvSafe, rateLimiter, SECURITY_HEADERS } = require('./security');
 
 const ROOT = path.join(__dirname, '..');
 const PUBLIC = path.join(ROOT, 'public');
@@ -59,6 +60,11 @@ try {
 }
 if (process.argv.includes('--demo')) config.mode = 'demo';
 const getConfig = () => config;
+const guard = createGuard({
+  adminToken: process.env.AIPULSE_ADMIN_TOKEN || '',
+  allowedHosts: (process.env.AIPULSE_ALLOWED_HOSTS || '').split(','),
+});
+const askLimit = rateLimiter(10, 60_000);
 function saveConfig(patch) {
   config = { ...config, ...patch };
   fs.mkdirSync(DATA, { recursive: true });
@@ -74,6 +80,7 @@ const publicConfig = () => ({
   alerts: config.alerts,
   hasAnthropicKey: !!(config.anthropicKey || process.env.ANTHROPIC_API_KEY),
   ai: assistant.status(() => config.anthropicKey),
+  requiresAdminToken: guard.requiresToken,
 });
 
 // ---------- core ----------
@@ -99,7 +106,7 @@ collector.on('status', (s) => broadcast('status', s));
 if (config.mode === 'demo' && store.events.length === 0) {
   store.ingest(demo.history(6, 20).map((e) => normalize(e, detector, { demo: true })));
 }
-setInterval(() => store.save(), 15_000).unref();
+setInterval(() => store.saveAsync().catch((err) => console.error('[store] save failed:', err.message)), 30_000).unref();
 
 // ---------- http helpers ----------
 const MIME = {
@@ -115,11 +122,11 @@ const MIME = {
 
 function send(res, status, body, headers = {}) {
   const isStr = typeof body === 'string' || Buffer.isBuffer(body);
-  res.writeHead(status, { 'Content-Type': isStr ? 'text/plain; charset=utf-8' : MIME['.json'], 'Cache-Control': 'no-store', ...headers });
+  res.writeHead(status, { ...SECURITY_HEADERS, 'Content-Type': isStr ? 'text/plain; charset=utf-8' : MIME['.json'], 'Cache-Control': 'no-store', ...headers });
   res.end(isStr ? body : JSON.stringify(body));
 }
 
-function readBody(req, limit = 20 * 1024 * 1024) {
+function readBody(req, limit = 1024 * 1024) {
   return new Promise((resolve, reject) => {
     let size = 0;
     const chunks = [];
@@ -141,9 +148,14 @@ function readBody(req, limit = 20 * 1024 * 1024) {
 }
 
 function serveStatic(req, res, pathname) {
-  const rel = pathname === '/' ? 'index.html' : decodeURIComponent(pathname).replace(/^\/+/, '');
+  let rel;
+  try {
+    rel = pathname === '/' ? 'index.html' : decodeURIComponent(pathname).replace(/^\/+/, '');
+  } catch {
+    return send(res, 400, 'Bad request');
+  }
   const file = path.normalize(path.join(PUBLIC, rel));
-  if (!file.startsWith(PUBLIC)) return send(res, 403, 'Forbidden');
+  if (file !== PUBLIC && !file.startsWith(PUBLIC + path.sep)) return send(res, 403, 'Forbidden');
   fs.readFile(file, (err, buf) => {
     if (err) {
       // SPA fallback
@@ -153,11 +165,7 @@ function serveStatic(req, res, pathname) {
   });
 }
 
-const csvCell = (v) => {
-  const s = Array.isArray(v) ? v.join('|') : v == null ? '' : String(v);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-};
-const toCsv = (rows, cols) => [cols.join(','), ...rows.map((r) => cols.map((c) => csvCell(r[c])).join(','))].join('\n');
+const toCsv = (rows, cols) => [cols.join(','), ...rows.map((r) => cols.map((c) => csvSafe(r[c])).join(','))].join('\n');
 
 // ---------- routes ----------
 const routes = {
@@ -308,6 +316,7 @@ const routes = {
 
   'POST /api/import': async (q, body) => {
     const records = Array.isArray(body) ? body : body.events;
+    if (Array.isArray(records) && records.length > 20_000) throw Object.assign(new Error('Too many records (max 20,000 per import).'), { status: 413 });
     if (!Array.isArray(records)) throw Object.assign(new Error('Expected a JSON array of events.'), { status: 400 });
     return importRecords(records, q.shift === '1');
   },
@@ -358,11 +367,23 @@ function handleExport(q, res) {
 }
 
 const server = http.createServer(async (req, res) => {
+  try {
+    await handle(req, res);
+  } catch (err) {
+    console.error('[http]', req.method, req.url, err);
+    if (!res.headersSent) send(res, 500, { error: 'Internal error' });
+    else res.end();
+  }
+});
+
+async function handle(req, res) {
   const url = new URL(req.url, 'http://localhost');
   const q = Object.fromEntries(url.searchParams);
+  const denied = guard.check(req);
+  if (denied) return send(res, denied.status, { error: denied.error });
 
   if (url.pathname === '/api/stream') {
-    res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
+    res.writeHead(200, { ...SECURITY_HEADERS, 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
     res.write(`retry: 3000\nevent: status\ndata: ${JSON.stringify(collector.status)}\n\n`);
     clients.add(res);
     const ping = setInterval(() => res.write(': ping\n\n'), 20_000);
@@ -374,19 +395,27 @@ const server = http.createServer(async (req, res) => {
   }
   if (url.pathname === '/api/export') return handleExport(q, res);
   if (url.pathname === '/api/ask' && req.method === 'POST') {
+    const wait = askLimit();
+    if (wait) return send(res, 429, { error: 'rate_limited', retryAfter: wait }, { 'Retry-After': String(wait) });
+    let body;
     try {
-      const body = await readBody(req);
-      const summary = store.summary(body.range || '1h', detector, Number(body.tz) || 0);
-      return assistant.ask({ history: body.messages || [], summary, insights: insights.generate(summary, store, detector), getKey: () => config.anthropicKey }, res);
+      body = await readBody(req, 256 * 1024);
     } catch (err) {
       return send(res, 400, { error: err.message });
     }
+    const summary = store.summary(body.range || '1h', detector, Number(body.tz) || 0);
+    return assistant.ask(
+      { history: body.messages || [], lang: body.lang, summary, insights: insights.generate(summary, store, detector), getKey: () => config.anthropicKey },
+      req,
+      res,
+    );
   }
 
   const handler = routes[`${req.method} ${url.pathname}`];
   if (handler) {
     try {
-      const body = ['POST', 'PUT'].includes(req.method) ? await readBody(req) : undefined;
+      const limit = url.pathname === '/api/import' ? 20 * 1024 * 1024 : 1024 * 1024;
+      const body = ['POST', 'PUT'].includes(req.method) ? await readBody(req, limit) : undefined;
       send(res, 200, await handler(q, body));
     } catch (err) {
       send(res, err.status || 500, { error: err.message || String(err) });
@@ -395,16 +424,21 @@ const server = http.createServer(async (req, res) => {
   }
   if (url.pathname.startsWith('/api/')) return send(res, 404, { error: 'Not found' });
   serveStatic(req, res, url.pathname);
-});
+}
 
 const PORT = Number(process.env.PORT) || 8787;
 const HOST = process.env.HOST || '127.0.0.1';
 if (require.main === module) {
   server.listen(PORT, HOST, () => {
     console.log(`\n  ⚡ AI Pulse v${VERSION} running at http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`);
-    console.log(`  mode: ${config.mode}${config.githubToken ? ' (token set)' : ' (no GitHub token — 60 req/h)'}\n`);
+    console.log(`  mode: ${config.mode}${config.githubToken ? ' (token set)' : ' (no GitHub token — 60 req/h)'}`);
+    if (!['127.0.0.1', 'localhost', '::1'].includes(HOST) && !guard.requiresToken) {
+      console.warn('  ⚠  Listening beyond localhost without AIPULSE_ADMIN_TOKEN: anyone on the network can change settings.');
+    }
+    console.log('');
     collector.start();
   });
+  process.on('unhandledRejection', (err) => console.error('[unhandled]', err));
   const shutdown = () => {
     store.dirty = true;
     store.save();

@@ -11,16 +11,7 @@
   <link rel="icon" href="/icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="/icon.svg" />
   <link rel="stylesheet" href="/styles.css" />
-  <script>
-    // Apply theme before first paint to avoid a flash.
-    (function () {
-      // ?theme=dark|light (e.g. for screenshots / kiosk displays) overrides the saved choice.
-      var p = new URLSearchParams(location.search).get('theme');
-      if (p === 'dark' || p === 'light') localStorage.setItem('aip.theme', p);
-      var t = localStorage.getItem('aip.theme');
-      if (t === 'dark' || t === 'light') document.documentElement.dataset.theme = t;
-    })();
-  </script>
+  <script src="/js/theme.js"></script>
 </head>
 <body>
   <div class="app">

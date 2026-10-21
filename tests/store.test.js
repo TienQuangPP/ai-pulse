@@ -75,3 +75,49 @@ test('co-occurrence graph, race frames and insights', () => {
   const list = insights.generate(s.summary('1h', d), s, d);
   assert.ok(list.length > 0 && list.every((i) => i.text.vi && i.text.en));
 });
+
+test('no fake trend when the previous period was not observed', () => {
+  const s = new Store(tmp());
+  s.ingest([raw('p1', 'langchain rag', 5), raw('p2', 'ollama', 6)].map((e) => normalize(e, d)));
+  const sum = s.summary('1h', d);
+  assert.equal(sum.kpis.compareAvailable, false);
+  assert.equal(sum.kpis.aiEventsPrev, null);
+  assert.ok(sum.keywords.every((k) => k.prev === null && k.growth === null));
+});
+
+test('previous period is compared once it is fully observed', () => {
+  const s = new Store(tmp());
+  s.ingest([raw('old', 'langchain', 130), raw('mid', 'langchain', 90), raw('new', 'langchain', 10)].map((e) => normalize(e, d)));
+  const sum = s.summary('1h', d);
+  assert.equal(sum.kpis.compareAvailable, true);
+  assert.equal(sum.kpis.aiEventsPrev, 1);
+});
+
+test('retag keeps events detected through the repository name', () => {
+  const s = new Store(tmp());
+  s.ingest([normalize(raw('r1', 'fix typo', 2, 'acme/langchain-rag-demo'), d)]);
+  assert.equal(s.events.length, 1);
+  s.retag(d);
+  assert.equal(s.events.length, 1);
+  assert.deepEqual(s.events[0].keywords.sort(), ['langchain', 'rag']);
+});
+
+test('non-AI events are not double counted after a restart', () => {
+  const file = tmp();
+  const s = new Store(file);
+  const batch = [raw('x1', 'fix typo', 3), raw('x2', 'add rag', 3)].map((e) => normalize(e, d));
+  s.ingest(batch);
+  s.save();
+  const reloaded = new Store(file);
+  reloaded.ingest(batch);
+  const total = [...reloaded.minutes.values()].reduce((a, m) => a + m.total, 0);
+  assert.equal(total, 2);
+});
+
+test('async save writes the same data as sync save', async () => {
+  const file = tmp();
+  const s = new Store(file);
+  s.ingest([normalize(raw('a1', 'claude agent', 1), d)]);
+  await s.saveAsync();
+  assert.equal(new Store(file).events.length, 1);
+});

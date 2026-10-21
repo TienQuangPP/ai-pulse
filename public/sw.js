@@ -1,6 +1,6 @@
 // AI Pulse service worker: app-shell caching so the UI opens instantly / offline.
-const CACHE = 'aipulse-personal-2.1.1';
-const SHELL = ['/', '/index.html', '/styles.css', '/icon.svg', '/manifest.webmanifest', '/js/app.js', '/js/core.js', '/js/pages.js', '/js/charts.js', '/js/i18n.js', '/js/pages2.js', '/js/fx.js'];
+const CACHE = 'aipulse-2.2.0';
+const SHELL = ['/', '/index.html', '/styles.css', '/icon.svg', '/manifest.webmanifest', '/js/app.js', '/js/core.js', '/js/pages.js', '/js/charts.js', '/js/i18n.js', '/js/pages2.js', '/js/fx.js', '/js/theme.js'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

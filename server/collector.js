@@ -71,7 +71,11 @@ class Collector extends EventEmitter {
 
   schedule() {
     if (this.paused) return;
-    const seconds = this.effectiveInterval();
+    let seconds = this.effectiveInterval();
+    // Rate limited: wait for the reset instead of burning polls that will be refused.
+    if (this.status.state === 'rate_limited' && this.status.rateReset > Date.now()) {
+      seconds = Math.min(3600, Math.ceil((this.status.rateReset - Date.now()) / 1000) + 2);
+    }
     this.setStatus({ nextPollAt: Date.now() + seconds * 1000, interval: seconds });
     this.timer = setTimeout(() => this.tick(), seconds * 1000);
   }

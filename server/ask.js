@@ -37,19 +37,38 @@ function snapshot(summary, insights) {
   };
 }
 
+const MESSAGES = {
+  vi: {
+    refusal: '_(Claude từ chối trả lời yêu cầu này.)_',
+    truncated: '_(Câu trả lời bị cắt ngắn.)_',
+    auth: 'Thiếu hoặc sai Anthropic API key — thêm trong Cài đặt.',
+    rate: 'Anthropic API đang giới hạn tần suất — thử lại sau ít phút.',
+    api: 'Lỗi Anthropic API',
+    generic: 'Không gọi được Claude',
+  },
+  en: {
+    refusal: '_(Claude declined to answer this request.)_',
+    truncated: '_(Answer truncated.)_',
+    auth: 'Anthropic API key is missing or invalid — add one in Settings.',
+    rate: 'Rate limited by the Anthropic API — try again shortly.',
+    api: 'Anthropic API error',
+    generic: 'Could not reach Claude',
+  },
+};
+
 /**
  * Streams the answer as plain text chunks into `res`.
  * history: [{ role: 'user'|'assistant', content: string }]
+ * The upstream request is aborted as soon as the browser disconnects, so closed tabs stop costing tokens.
  */
-async function ask({ history, summary, insights, getKey }, res) {
+async function ask({ history, lang, summary, insights, getKey }, req, res) {
+  const t = MESSAGES[lang === 'en' ? 'en' : 'vi'];
   if (!Anthropic) {
     res.writeHead(501, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({ error: 'not_installed' }));
   }
-  const key = getKey();
-  const client = key ? new Anthropic({ apiKey: key }) : new Anthropic();
 
-  const turns = history
+  const turns = (Array.isArray(history) ? history : [])
     .filter((m) => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim())
     .slice(-12)
     .map((m) => ({ role: m.role, content: m.content.slice(0, 4000) }));
@@ -58,11 +77,20 @@ async function ask({ history, summary, insights, getKey }, res) {
     return res.end(JSON.stringify({ error: 'Last message must be from the user.' }));
   }
   const last = turns.at(-1);
-  last.content = `${last.content}\n\n<data>\n${JSON.stringify(snapshot(summary, insights))}\n</data>`;
+  last.content = `${last.content}
+
+<data>
+${JSON.stringify(snapshot(summary, insights))}
+</data>`;
 
   res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no' });
+  let stream;
+  const abort = () => stream?.abort();
+  res.on('close', abort);
   try {
-    const stream = client.beta.messages.stream({
+    const key = getKey();
+    const client = key ? new Anthropic({ apiKey: key }) : new Anthropic();
+    stream = client.beta.messages.stream({
       model: MODEL,
       max_tokens: 64000,
       betas: ['server-side-fallback-2026-07-01'],
@@ -75,16 +103,26 @@ async function ask({ history, summary, insights, getKey }, res) {
       if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') res.write(event.delta.text);
     }
     const final = await stream.finalMessage();
-    if (final.stop_reason === 'refusal') res.write('\n\n_(Claude declined to answer this request.)_');
-    else if (final.stop_reason === 'max_tokens') res.write('\n\n_(Answer truncated.)_');
+    if (final.stop_reason === 'refusal') res.write(`
+
+${t.refusal}`);
+    else if (final.stop_reason === 'max_tokens') res.write(`
+
+${t.truncated}`);
   } catch (err) {
-    let msg = err.message || String(err);
-    if (err instanceof Anthropic.AuthenticationError) msg = 'Anthropic API key is missing or invalid — add one in Settings.';
-    else if (err instanceof Anthropic.RateLimitError) msg = 'Rate limited by the Anthropic API — try again shortly.';
-    else if (err instanceof Anthropic.APIError) msg = `Anthropic API error ${err.status}: ${err.message}`;
-    res.write(`\n\n⚠️ ${msg}`);
+    if (res.destroyed || err instanceof Anthropic.APIUserAbortError) return;
+    let msg = `${t.generic}: ${err.message || err}`;
+    if (err instanceof Anthropic.AuthenticationError) msg = t.auth;
+    else if (err instanceof Anthropic.RateLimitError) msg = t.rate;
+    else if (err instanceof Anthropic.APIError) msg = `${t.api} ${err.status ?? ''}: ${err.message}`;
+    else if (err instanceof Anthropic.AnthropicError) msg = t.auth; // e.g. no credentials configured at all
+    res.write(`
+
+⚠️ ${msg}`);
+  } finally {
+    res.off('close', abort);
   }
-  res.end();
+  if (!res.destroyed) res.end();
 }
 
 module.exports = { ask, status, MODEL };

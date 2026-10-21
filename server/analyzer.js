@@ -37,18 +37,28 @@ async function analyze(input, { token, detector, store }) {
     ...DEP_FILES.map((f) => gh(`/repos/${full}/contents/${f}`, token, 'application/vnd.github.raw').catch(() => null)),
   ]);
 
+  const name = detector.detect(repo.full_name.replace('/', ' / '));
+  const topics = detector.detect((repo.topics || []).join(' '));
+  // When the name or topics already say "AI", ambiguous words in the description
+  // ("agents", "embeddings", "MCP") are meaningful too.
+  const aiContext = name.keywords.length > 0 || topics.keywords.length > 0;
   const sources = {
-    description: detector.detect(repo.description || ''),
-    topics: detector.detect((repo.topics || []).join(' ')),
+    name,
+    description: detector.detect(repo.description || '', { allowWeak: aiContext }),
+    topics,
     readme: detector.detect((readme || '').slice(0, 200_000)),
-    dependencies: detector.detect(deps.filter(Boolean).join('\n')),
+    // Package names are unambiguous, so weak terms such as "torch" or "transformers" count here.
+    dependencies: detector.detect(deps.filter(Boolean).join('\n'), { allowWeak: true }),
   };
 
-  const weights = { description: 18, topics: 14, dependencies: 12, readme: 5 };
+  // Each source saturates on its own, so a long README alone cannot max out the score.
+  // Points: [max points, distinct technologies needed to reach the max].
+  const SCORING = { name: [15, 1], description: [25, 2], topics: [20, 4], dependencies: [20, 3], readme: [10, 8] };
   const stack = new Map();
-  let score = 0;
+  const breakdown = {};
   for (const [src, det] of Object.entries(sources)) {
-    score += Math.min(det.keywords.length, 4) * weights[src];
+    const [max, needed] = SCORING[src];
+    breakdown[src] = Math.round(max * Math.min(1, det.keywords.length / needed));
     for (const k of det.keywords) {
       const tech = detector.byId.get(k);
       const entry = stack.get(k) || { id: k, label: tech.label, category: tech.category, sources: [] };
@@ -56,7 +66,9 @@ async function analyze(input, { token, detector, store }) {
       stack.set(k, entry);
     }
   }
-  score = Math.min(100, score);
+  const groups = new Set([...stack.values()].map((s) => s.category));
+  breakdown.breadth = Math.round(10 * Math.min(1, groups.size / 5));
+  const score = Math.min(100, Object.values(breakdown).reduce((a, b) => a + b, 0));
 
   const langTotal = Object.values(languages || {}).reduce((s, v) => s + v, 0) || 1;
   const tracked = store.query({ range: 'all', repo: repo.full_name, limit: 20 });
@@ -80,7 +92,8 @@ async function analyze(input, { token, detector, store }) {
       .sort((a, b) => b.share - a.share)
       .slice(0, 8),
     score,
-    verdict: score >= 60 ? 'ai-native' : score >= 25 ? 'ai-enabled' : score > 0 ? 'ai-curious' : 'non-ai',
+    verdict: score >= 65 ? 'ai-native' : score >= 35 ? 'ai-enabled' : score > 0 ? 'ai-curious' : 'non-ai',
+    breakdown,
     stack: [...stack.values()].sort((a, b) => b.sources.length - a.sources.length),
     depFiles: DEP_FILES.filter((_, i) => deps[i]),
     tracked: { count: tracked.length, events: tracked.slice(0, 10) },

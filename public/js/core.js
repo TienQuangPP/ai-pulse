@@ -22,16 +22,41 @@ export const on = (type, fn) => {
   return () => bus.removeEventListener(type, h);
 };
 
-export async function api(path, { method = 'GET', body } = {}) {
+/** Headers for write requests: JSON body plus the optional admin token (servers exposed on a network). */
+export function writeHeaders() {
+  const h = { 'Content-Type': 'application/json' };
+  const token = localStorage.getItem('aip.adminToken');
+  if (token) h['X-AIPulse-Token'] = token;
+  return h;
+}
+
+export async function api(path, { method = 'GET', body } = {}, retried = false) {
+  const write = method !== 'GET';
   const res = await fetch(path, {
     method,
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
+    headers: write ? writeHeaders() : undefined,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  if (res.status === 401 && data.error === 'admin_token_required' && !retried) {
+    const token = prompt(t('admin_token_prompt'));
+    if (token) {
+      localStorage.setItem('aip.adminToken', token.trim());
+      return api(path, { method, body }, true);
+    }
+  }
+  if (!res.ok) throw new Error(t('err_' + data.error) !== 'err_' + data.error ? t('err_' + data.error) : data.error || `HTTP ${res.status}`);
   return data;
 }
+
+// Avatars come from github.com; hide broken ones without inline handlers (strict CSP).
+document.addEventListener(
+  'error',
+  (e) => {
+    if (e.target instanceof HTMLImageElement && e.target.classList.contains('avatar')) e.target.style.visibility = 'hidden';
+  },
+  true,
+);
 
 export const $ = (sel, root = document) => root.querySelector(sel);
 export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -69,6 +94,8 @@ export const fmtDateTime = (ms) =>
   new Date(ms).toLocaleString(getLang() === 'vi' ? 'vi-VN' : 'en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 export const fmtAxis = (bucket) => (ms) => (bucket >= 2 * 3600_000 ? new Date(ms).toLocaleDateString(getLang() === 'vi' ? 'vi-VN' : 'en-US', { month: 'numeric', day: 'numeric' }) + ' ' + fmtTime(ms) : fmtTime(ms));
 export function deltaHtml(now, prev) {
+  // null = previous period not (fully) observed: show nothing rather than a fake trend.
+  if (prev == null) return `<small title="${t('no_compare')}">—</small>`;
   if (!prev) return now ? `<span class="delta up">▲ ${t('new_')}</span>` : '';
   const d = (now - prev) / prev;
   const cls = d >= 0 ? 'up' : 'down';
@@ -115,6 +142,7 @@ export function wireCommon(root) {
       });
       return;
     }
+    if (ev.target.closest('[data-stop]')) return;
     const repoLink = ev.target.closest('[data-repo]');
     if (repoLink && !ev.ctrlKey && !ev.metaKey) {
       ev.preventDefault();
@@ -127,7 +155,7 @@ export function wireCommon(root) {
 export function eventItem(e, { compact = false, fresh = false } = {}) {
   const typeShort = e.type.replace('Event', '');
   return `<li class="${fresh ? 'fresh ' : ''}${state.watch.has(e.repo) ? 'watched' : ''}" data-id="${esc(e.id)}">
-    <img class="avatar" loading="lazy" src="${esc(avatarUrl(e.actor, e.avatar))}" alt="" onerror="this.style.visibility='hidden'"/>
+    <img class="avatar" loading="lazy" src="${esc(avatarUrl(e.actor, e.avatar))}" alt=""/>
     <div>
       <div class="head">
         <a class="repo" href="https://github.com/${esc(e.repo)}" data-repo="${esc(e.repo)}">${esc(e.repo)}</a>

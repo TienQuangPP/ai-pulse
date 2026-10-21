@@ -33,24 +33,49 @@ class Store {
       const raw = JSON.parse(fs.readFileSync(this.file, 'utf8'));
       this.events = raw.events || [];
       for (const [t, total, ai] of raw.minutes || []) this.minutes.set(t, { total, ai });
+      // Recent non-AI ids too: GitHub re-serves the same latest events after a restart,
+      // and without them every non-AI event would be counted twice in the totals.
+      (raw.seen || []).forEach((id) => this.markSeen(id));
       this.events.forEach((e) => this.markSeen(e.id));
     } catch {
       /* first run */
     }
   }
 
-  save() {
-    if (!this.dirty) return;
-    const data = {
+  serialize() {
+    this.dirty = false;
+    return JSON.stringify({
       savedAt: Date.now(),
       events: this.events,
       minutes: [...this.minutes].map(([t, m]) => [t, m.total, m.ai]),
-    };
+      seen: this.seenOrder.slice(-5000),
+    });
+  }
+
+  /** Synchronous save (shutdown / reset). Writes to a temp file then renames atomically. */
+  save() {
+    if (!this.dirty) return;
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     const tmp = this.file + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify(data));
+    fs.writeFileSync(tmp, this.serialize());
     fs.renameSync(tmp, this.file);
-    this.dirty = false;
+  }
+
+  /** Non-blocking periodic save; overlapping calls are skipped. */
+  async saveAsync() {
+    if (!this.dirty || this.saving) return;
+    this.saving = true;
+    try {
+      await fs.promises.mkdir(path.dirname(this.file), { recursive: true });
+      const tmp = this.file + '.tmp';
+      await fs.promises.writeFile(tmp, this.serialize());
+      await fs.promises.rename(tmp, this.file);
+    } catch (err) {
+      this.dirty = true;
+      throw err;
+    } finally {
+      this.saving = false;
+    }
   }
 
   reset() {
@@ -92,8 +117,14 @@ class Store {
       this.minutes.set(minute, bucket);
     }
     if (!events.length) return added;
-    // Keep chronological order even if a page arrived out of order.
-    if (added.length) this.events.sort((a, b) => a.createdAt - b.createdAt);
+    // Keep chronological order (GitHub pages are newest-first); sort only the unsorted tail.
+    if (added.length) {
+      const firstNew = this.events.length - added.length;
+      const tailStart = Math.max(0, firstNew - 1);
+      let ordered = true;
+      for (let i = tailStart + 1; i < this.events.length && ordered; i++) ordered = this.events[i - 1].createdAt <= this.events[i].createdAt;
+      if (!ordered) this.events.sort((a, b) => a.createdAt - b.createdAt);
+    }
     if (this.events.length > MAX_EVENTS) this.events.splice(0, this.events.length - MAX_EVENTS);
     const cutoff = Date.now() - MINUTE_RETENTION;
     for (const t of this.minutes.keys()) if (t < cutoff) this.minutes.delete(t);
@@ -103,7 +134,8 @@ class Store {
 
   /** Re-tag every stored event (after keyword list changes). */
   retag(detector) {
-    for (const e of this.events) Object.assign(e, detector.detect(e.text));
+    // Same input as normalize(): the repository name is part of the signal.
+    for (const e of this.events) Object.assign(e, detector.detect(`${e.repo.replace('/', ' / ')} ${e.text}`));
     this.events = this.events.filter((e) => e.keywords.length);
     this.dirty = true;
   }
@@ -150,7 +182,13 @@ class Store {
   summary(range, detector, tzOffsetMin = 0) {
     const { since, until, bucket } = this.rangeInfo(range);
     const events = this.inRange(since, until);
-    const prev = this.inRange(since - (until - since), since);
+    // Compare with the previous period only when we actually observed all of it;
+    // otherwise "-80% vs previous period" right after a fresh start would be fiction.
+    const minuteKeys = [...this.minutes.keys()];
+    const firstObserved = minuteKeys.length ? Math.min(...minuteKeys) : until;
+    const lastObserved = minuteKeys.length ? Math.max(...minuteKeys) + MINUTE : until;
+    const prevComplete = Boolean(RANGES[range]) && firstObserved <= since - (until - since) + bucket;
+    const prev = prevComplete ? this.inRange(since - (until - since), since) : [];
     const timeline = this.timeline(since, until, bucket);
 
     const count = (list, key) => {
@@ -163,7 +201,7 @@ class Store {
     const keywords = [...kwNow]
       .map(([id, c]) => {
         const tech = detector.byId.get(id);
-        const p = kwPrev.get(id) || 0;
+        const p = prevComplete ? kwPrev.get(id) || 0 : null;
         return {
           id,
           label: tech?.label || id,
@@ -193,10 +231,17 @@ class Store {
     // GitHub's public feed lags ~5 min, so use the average rate over the observed span.
     const firstSeen = events[0]?.createdAt ?? until;
     const spanMin = Math.max(1, (until - Math.max(since, firstSeen)) / MINUTE);
+    // Momentum compares the two halves of the observed part of the current window,
+    // so it works right after start-up and is not skewed by the feed's trailing lag.
+    const dataUntil = Math.min(until, lastObserved);
+    const mid = Math.max(since, firstObserved) + (dataUntil - Math.max(since, firstObserved)) / 2;
+    const firstHalf = count(this.inRange(since, mid), 'keywords');
+    const secondHalf = count(this.inRange(mid, dataUntil), 'keywords');
     const trending = keywords
-      .filter((k) => k.count >= 3)
+      .map((k) => ({ ...k, count: secondHalf.get(k.id) || 0, prev: firstHalf.get(k.id) || 0 }))
+      .filter((k) => k.count >= 3 && k.count > k.prev)
       .map((k) => ({ ...k, momentum: (k.count - k.prev) / Math.max(k.prev, 1) }))
-      .sort((a, b) => b.momentum - a.momentum)
+      .sort((a, b) => b.momentum - a.momentum || b.count - a.count)
       .slice(0, 5);
 
     return {
@@ -206,7 +251,8 @@ class Store {
       bucket,
       kpis: {
         aiEvents: events.length,
-        aiEventsPrev: prev.length,
+        aiEventsPrev: prevComplete ? prev.length : null,
+        compareAvailable: prevComplete,
         totalEvents: totalAll,
         aiRatio: totalAll ? events.length / totalAll : 0,
         uniqueRepos: repos.length,

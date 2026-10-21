@@ -3,7 +3,8 @@ services:
     build: .
     container_name: ai_pulse
     ports:
-      - "8787:8787"
+      # Published on localhost only. To expose on a network, set AIPULSE_ADMIN_TOKEN first.
+      - "127.0.0.1:8787:8787"
     env_file:
       - path: .env
         required: false

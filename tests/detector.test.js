@@ -39,3 +39,28 @@ test('supports custom keywords', () => {
   assert.deepEqual(c.detect('Add .cursor-rules file').keywords, ['c_cursor']);
   assert.ok(c.categories().some((x) => x.id === 'custom'));
 });
+
+test('ambiguous words alone are not counted as AI', () => {
+  assert.deepEqual(kw('Update MCP mappings for Minecraft 1.20'), []);
+  assert.deepEqual(kw('LoRa gateway firmware for ESP32'), []);
+  assert.deepEqual(kw('Resize GPT partition table'), []);
+  assert.deepEqual(kw('torch light toggle'), []);
+  assert.deepEqual(kw('grok pattern for logstash'), []);
+  assert.deepEqual(kw('whisper network fix'), []);
+  assert.deepEqual(kw('Embed YouTube player embedding'), []);
+});
+
+test('ambiguous words count next to a strong AI signal', () => {
+  assert.deepEqual(kw('Add MCP server for Claude Desktop'), ['claude', 'mcp']);
+  assert.deepEqual(kw('Store OpenAI embeddings in pgvector'), ['embedding', 'openai', 'pgvector']);
+  assert.ok(kw('Add Whisper transcription to the RAG pipeline').includes('whisper'));
+});
+
+test('model names with suffixes are recognised', () => {
+  for (const name of ['GPT-4o', 'gpt-4.1-mini', 'GPT 5 pro', 'gpt-oss-20b']) assert.deepEqual(kw(`use ${name}`), ['gpt'], name);
+});
+
+test('dependency manifests may use weak package names', () => {
+  assert.deepEqual(d.detect('torch==2.4\nnumpy\ntransformers', { allowWeak: true }).keywords.sort(), ['huggingface', 'pytorch']);
+  assert.deepEqual(d.detect('torch==2.4\nnumpy').keywords, []);
+});

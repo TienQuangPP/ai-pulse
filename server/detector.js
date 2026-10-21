@@ -3,10 +3,12 @@ const { CATEGORIES, TECHNOLOGIES } = require('./taxonomy');
 
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+// Custom boundaries: letters/digits only, so "_", "-", "/", "." all separate words.
+const toRegex = (patterns) =>
+  patterns?.length ? new RegExp(`(?<![a-z0-9])(?:${patterns.map((p) => `(?:${p})`).join('|')})(?![a-z0-9])`, 'gi') : null;
+
 function compile(tech) {
-  const source = tech.patterns.map((p) => `(?:${p})`).join('|');
-  // Custom boundaries: letters/digits only, so "_", "-", "/", "." all separate words.
-  return { ...tech, regex: new RegExp(`(?<![a-z0-9])(?:${source})(?![a-z0-9])`, 'gi') };
+  return { ...tech, regex: toRegex(tech.patterns), weakRegex: toRegex(tech.weak) };
 }
 
 class Detector {
@@ -35,26 +37,41 @@ class Detector {
   }
 
   list() {
-    return this.techs.map(({ id, label, category, patterns, custom }) => ({ id, label, category, patterns, custom: !!custom }));
+    return this.techs.map(({ id, label, category, patterns, weak, custom }) => ({ id, label, category, patterns, weak: weak || [], custom: !!custom }));
   }
 
-  /** Returns { keywords: [id], categories: [id], terms: [string] } */
-  detect(text) {
-    if (!text) return { keywords: [], categories: [], terms: [] };
+  /**
+   * Returns { keywords: [id], categories: [id], terms: [string] }.
+   * Weak (ambiguous) matches count only next to a strong signal, unless `allowWeak`
+   * is set (dependency manifests, where every name is a package).
+   */
+  detect(text, { allowWeak = false } = {}) {
+    const empty = { keywords: [], categories: [], terms: [] };
+    if (!text) return empty;
     // Also scan a camelCase-split variant so "RagPipeline" -> "rag pipeline".
     const variants = [text, text.replace(/([a-z])([A-Z])/g, '$1 $2')];
-    const keywords = new Set();
-    const terms = new Set();
-    for (const tech of this.techs) {
+    const strong = new Set();
+    const weak = new Set();
+    const strongTerms = new Set();
+    const weakTerms = new Set();
+    const scan = (regex, hits, termSet, id) => {
+      if (!regex) return;
       for (const v of variants) {
-        tech.regex.lastIndex = 0;
-        const matches = v.match(tech.regex);
+        regex.lastIndex = 0;
+        const matches = v.match(regex);
         if (matches) {
-          keywords.add(tech.id);
-          matches.forEach((m) => terms.add(m.toLowerCase()));
+          hits.add(id);
+          matches.forEach((m) => termSet.add(m.toLowerCase()));
         }
       }
+    };
+    for (const tech of this.techs) {
+      scan(tech.regex, strong, strongTerms, tech.id);
+      scan(tech.weakRegex, weak, weakTerms, tech.id);
     }
+    if (!strong.size && !allowWeak) return empty;
+    const keywords = new Set([...strong, ...weak]);
+    const terms = new Set([...strongTerms, ...weakTerms]);
     // "gpt" alone is implied by chatgpt; drop the generic duplicate.
     if (keywords.has('chatgpt')) keywords.delete('gpt');
     // Likewise "llama" is implied by llama.cpp / LlamaIndex unless "llama" appears on its own.

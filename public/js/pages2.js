@@ -1,7 +1,7 @@
 // v2.1 pages: AI Insights + Ask, Live Radar, Technology Race, Ecosystem graph.
 import { t, getLang } from './i18n.js';
 import { showTip, hideTip, onResize } from './charts.js';
-import { state, api, $, esc, fmtNum, timeAgo, catColor, catLabel, techLabel, techColor, techTag, eventItem, wireCommon, openRepo, fmtDateTime, rangeLabel } from './core.js';
+import { state, api, writeHeaders, $, esc, fmtNum, timeAgo, catColor, catLabel, techLabel, techColor, techTag, eventItem, wireCommon, openRepo, fmtDateTime, rangeLabel } from './core.js';
 
 const tz = () => new Date().getTimezoneOffset();
 const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -70,7 +70,7 @@ export function insightsPage(view) {
     $('#ins').innerHTML =
       list
         .map(
-          (i, k) => `<li class="ins ${i.kind}" style="animation-delay:${k * 60}ms"><span class="ins-ico">${i.icon}</span>
+          (i, k) => `<li class="ins ins-${i.kind}" style="animation-delay:${k * 60}ms"><span class="ins-ico">${i.icon}</span>
           <span>${miniMarkdown(i.text[getLang()]).replace(/^<p>|<\/p>$/g, '')}</span>${i.link ? `<a href="${esc(i.link)}" aria-label="${t('open')}">→</a>` : ''}</li>`,
         )
         .join('') || `<li class="empty">${t('no_data_hint')}</li>`;
@@ -87,10 +87,11 @@ export function insightsPage(view) {
     try {
       const res = await fetch('/api/ask', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ range: state.range, tz: tz(), messages: messages.slice(0, -1) }),
+        headers: writeHeaders(),
+        body: JSON.stringify({ range: state.range, tz: tz(), lang: getLang(), messages: messages.slice(0, -1) }),
       });
       if (res.status === 501) reply.content = t('ask_install_short');
+      else if (res.status === 429) reply.content = `⏳ ${t('ask_slow_down')}`;
       else if (!res.ok) reply.content = `⚠️ ${(await res.json().catch(() => ({}))).error || res.status}`;
       else {
         const reader = res.body.getReader();

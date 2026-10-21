@@ -61,7 +61,7 @@ export function overview(view) {
     const k = data.kpis;
     const kpi = (lbl, val, sub, title = '') => `<div class="card kpi" title="${esc(title)}"><div class="lbl">${lbl}</div><div class="val">${val}</div><div class="sub">${sub}</div></div>`;
     $('#kpis').innerHTML = [
-      kpi(t('kpi_ai'), fmtNum(k.aiEvents), `${deltaHtml(k.aiEvents, k.aiEventsPrev)} ${t('vs_prev')}`),
+      kpi(t('kpi_ai'), fmtNum(k.aiEvents), k.compareAvailable ? `${deltaHtml(k.aiEvents, k.aiEventsPrev)} ${t('vs_prev')}` : t('no_compare')),
       kpi(t('kpi_share'), fmtPct(k.aiRatio), `${t('of_all')} ${fmtNum(k.totalEvents)} ${t('events')}`),
       kpi(t('kpi_rate'), k.perMinute.toFixed(1), t('last5')),
       kpi(t('kpi_repos'), fmtNum(k.uniqueRepos), rangeLabel()),
@@ -316,7 +316,7 @@ export function tech(view, params) {
     if (!view.isConnected) return;
     const counts = new Map(s.keywords.map((k) => [k.id, k]));
     rows = state.taxonomy.technologies
-      .map((x) => ({ ...x, count: counts.get(x.id)?.count || 0, prev: counts.get(x.id)?.prev || 0 }))
+      .map((x) => ({ ...x, count: counts.get(x.id)?.count || 0, prev: s.kpis.compareAvailable ? counts.get(x.id)?.prev || 0 : null }))
       .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
     if (!slots.size) rows.slice(0, 4).filter((r) => r.count).forEach((r, i) => slots.set(r.id, i + 1));
     renderTable();
@@ -391,13 +391,13 @@ export function repos(view, params) {
           const kws = Object.entries(x.keywords).sort((a, b) => b[1] - a[1]);
           return `<tr class="clickable" data-repo="${esc(x.repo)}">
           <td>${starBtn(x.repo)}</td>
-          <td><div class="repo-cell"><img class="avatar" loading="lazy" src="${ownerAvatar(x.repo)}" alt="" onerror="this.style.visibility='hidden'"/><span class="name">${esc(x.repo)}</span></div></td>
+          <td><div class="repo-cell"><img class="avatar" loading="lazy" src="${ownerAvatar(x.repo)}" alt=""/><span class="name">${esc(x.repo)}</span></div></td>
           <td class="num">${fmtNum(x.count)}</td>
           <td class="num">${fmtNum(x.actors)}</td>
           <td><div class="chips">${kws.slice(0, 4).map(([k]) => techTag(k)).join('')}${kws.length > 4 ? `<small>+${kws.length - 4}</small>` : ''}</div></td>
           <td>${sparkline(x.spark)}</td>
           <td><small>${timeAgo(x.lastSeen)}</small></td>
-          <td><a class="btn sm" href="#/analyzer?repo=${encodeURIComponent(x.repo)}" onclick="event.stopPropagation()">${t('analyze')}</a></td>
+          <td><a class="btn sm" href="#/analyzer?repo=${encodeURIComponent(x.repo)}" data-stop>${t('analyze')}</a></td>
         </tr>`;
         })
         .join('') || `<tr><td colspan="8" class="empty">${t('empty')}</td></tr>`;
@@ -442,7 +442,7 @@ export function devs(view) {
         .map(
           (a, i) => `<tr>
         <td><small>${i + 1}</small></td>
-        <td><div class="repo-cell"><img class="avatar" loading="lazy" src="${avatarUrl(a.actor)}" alt="" onerror="this.style.visibility='hidden'"/>
+        <td><div class="repo-cell"><img class="avatar" loading="lazy" src="${avatarUrl(a.actor)}" alt=""/>
           <a class="name" href="#/feed?actor=${encodeURIComponent(a.actor)}">@${esc(a.actor)}</a>
           <a href="https://github.com/${esc(a.actor)}" target="_blank" rel="noopener" title="GitHub">↗</a></div></td>
         <td class="num">${fmtNum(a.count)}</td>
@@ -524,6 +524,7 @@ export function analyzer(view, params) {
                 : `<div class="empty">${t('pg_none')}</div>`
             }
             <div class="help">${t('an_deps')}: ${r.depFiles.length ? r.depFiles.map((x) => `<code>${esc(x)}</code>`).join(', ') : '—'}</div>
+            ${r.breakdown ? `<div class="help">${t('an_breakdown')}: ${Object.entries(r.breakdown).map(([k, v]) => `${t('src_' + k)} <b>${v}</b>`).join(' · ')}</div>` : ''}
           </section>
           <section class="card span-5"><div class="card-h"><h2>${t('an_langs')}</h2></div>
             <div class="langbar">${r.languages.map((l, i) => `<span style="width:${l.share * 100}%;background:${langColors(i)}" title="${esc(l.name)} ${fmtPct(l.share)}"></span>`).join('')}</div>

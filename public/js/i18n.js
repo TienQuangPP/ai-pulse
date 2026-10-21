@@ -63,6 +63,9 @@ export const STRINGS = {
     wel_features: [['📡', 'Radar trực tiếp', 'Mỗi commit, PR về AI hiện lên tức thì'], ['✨', 'AI Insights', 'Nhận định tự động + hỏi đáp với Claude'], ['🏁', 'Cuộc đua', 'Xem công nghệ nào vượt lên dẫn đầu'], ['⌬', 'Phân tích repo', 'Chấm điểm AI, so sánh đối đầu']],
     wel_choose: 'Bắt đầu với nguồn dữ liệu nào?', wel_tip: 'Mẹo: Ctrl K để tìm mọi thứ · F để bật chế độ TV · ? để xem phím tắt',
     tv_exit: 'Thoát TV', tv_on: 'Chế độ TV', tv_hint: 'Tự chuyển trang mỗi 25 giây — nhấn Esc để thoát.', cmd_tv: 'Bật/tắt chế độ TV (trình chiếu)', sc_tv: 'Chế độ TV / trình chiếu',
+    admin_token_prompt: 'Máy chủ này yêu cầu admin token (AIPULSE_ADMIN_TOKEN). Nhập token:', ask_slow_down: 'Hỏi hơi nhanh — đợi một chút rồi thử lại.',
+    err_host_not_allowed: 'Tên miền không được phép (thêm vào AIPULSE_ALLOWED_HOSTS).', err_cross_origin: 'Yêu cầu từ trang khác bị chặn.', err_json_required: 'Yêu cầu không hợp lệ.', err_admin_token_required: 'Cần admin token.',
+    src_name: 'tên repo', an_breakdown: 'Điểm theo nguồn', src_breadth: 'độ phủ nhóm', no_compare: 'chưa đủ dữ liệu kỳ trước',
     days: ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'],
   },
   en: {
@@ -129,11 +132,14 @@ export const STRINGS = {
     wel_features: [['📡', 'Live radar', 'Every AI commit and PR, the moment it lands'], ['✨', 'AI Insights', 'Automatic insights + chat with Claude'], ['🏁', 'The race', 'Watch technologies overtake each other'], ['⌬', 'Repo analyzer', 'AI score and head-to-head comparisons']],
     wel_choose: 'Which data source do you want to start with?', wel_tip: 'Tip: Ctrl K finds anything · F for TV mode · ? for shortcuts',
     tv_exit: 'Exit TV', tv_on: 'TV mode', tv_hint: 'Rotates pages every 25 s — press Esc to exit.', cmd_tv: 'Toggle TV (presentation) mode', sc_tv: 'TV / presentation mode',
+    admin_token_prompt: 'This server requires an admin token (AIPULSE_ADMIN_TOKEN). Enter it:', ask_slow_down: 'Too many questions at once — wait a moment and try again.',
+    err_host_not_allowed: 'Host not allowed (add it to AIPULSE_ALLOWED_HOSTS).', err_cross_origin: 'Cross-site request blocked.', err_json_required: 'Invalid request.', err_admin_token_required: 'Admin token required.',
+    src_name: 'repo name', an_breakdown: 'Points by source', src_breadth: 'group breadth', no_compare: 'previous period not fully covered',
     days: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
   },
 };
 
-let lang = localStorage.getItem('aip.lang') || 'vi';
+let lang = (typeof localStorage !== 'undefined' && localStorage.getItem('aip.lang')) || 'vi';
 export const getLang = () => lang;
 export function setLang(l) {
   lang = l;
